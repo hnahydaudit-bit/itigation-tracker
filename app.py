@@ -1,61 +1,54 @@
 import streamlit as st
 import pandas as pd
+import google.generativeai as genai
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
+import io
 import os
 import tempfile
-from PyPDF2 import PdfReader
-from pdf2image import convert_from_path
-import pytesseract
-import google.generativeai as genai
 
-# Configure Gemini (API key from Streamlit secrets)
+# -------------------------------
+# 🔑 Configure Gemini (put your key in Streamlit Secrets)
+# -------------------------------
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-st.set_page_config(page_title="LITIGATION TRACKER", page_icon="📂")
-
-st.title("📂 LITIGATION TRACKER")
-st.write("Upload your GST litigation notices and extract key details into Excel.")
-
-uploaded_files = st.file_uploader("Upload your PDFs here", type=["pdf"], accept_multiple_files=True)
-
-# Output columns
-columns = [
-    "Entity Name",
-    "GSTIN",
-    "Type of Notice / Order (System Update)",
-    "Description",
-    "Ref ID",
-    "Date Of Issuance",
-    "Due Date",
-    "Case ID Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)",
-    "Financial Year",
-    "Total Demand Amount as per Notice",
-    "Source"
-]
-
-def extract_text_from_pdf(file):
-    """Extract text from PDF, using OCR if scanned."""
-    try:
-        reader = PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
-        if text.strip():
-            return text
-    except:
-        pass
-
-    # If text is empty, do OCR
-    images = convert_from_path(file)
+# -------------------------------
+# 📄 PDF Text Extraction
+# -------------------------------
+def extract_text_from_pdf(file_path):
+    """Extract text from text PDFs or OCR from scanned PDFs using PyMuPDF + Tesseract."""
     text = ""
-    for img in images:
-        text += pytesseract.image_to_string(img)
+    pdf = fitz.open(file_path)
+
+    for page_num in range(len(pdf)):
+        page = pdf[page_num]
+
+        # Try normal text extraction
+        page_text = page.get_text("text")
+        if page_text.strip():
+            text += page_text + "\n"
+        else:
+            # Fallback to OCR if no text
+            pix = page.get_pixmap()
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            ocr_text = pytesseract.image_to_string(img)
+            text += ocr_text + "\n"
+
+    pdf.close()
     return text
 
-def extract_details_with_gemini(text, source_name):
-    """Ask Gemini to extract structured fields based on context."""
+# -------------------------------
+# 🧠 AI Extraction
+# -------------------------------
+def extract_notice_details(text, filename):
+    """Send extracted text to Gemini and structure it into required fields."""
     prompt = f"""
-    You are an assistant that extracts litigation notice details into structured fields.
-    From the following notice text, extract the following details:
+    You are an AI assistant for GST litigation document analysis.
+    Extract the following details from the given document text.
+    If something is missing, leave it blank. Be accurate and concise.
+
+    Required columns:
     - Entity Name
     - GSTIN
     - Type of Notice / Order (System Update)
@@ -63,47 +56,31 @@ def extract_details_with_gemini(text, source_name):
     - Ref ID
     - Date Of Issuance
     - Due Date
-    - Case ID Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)
+    - Case ID
+    - Notice Type (ASMT-10 or ADT-01 / SCN or Appeal)
     - Financial Year
     - Total Demand Amount as per Notice
+    - Source (file name)
 
-    Return them strictly as JSON with keys exactly matching.
-
-    Notice text:
+    Document text:
     {text}
     """
 
     model = genai.GenerativeModel("models/gemini-2.5-flash")
+    response = model.generate_content(prompt)
+
     try:
-        resp = model.generate_content(prompt)
-        data = eval(resp.text)  # safe because Gemini outputs JSON
-    except Exception:
-        data = {col: "" for col in columns}
-    data["Source"] = source_name
-    return data
+        output = response.text.strip()
 
-if uploaded_files:
-    if st.button("Process Notices"):
-        results = []
-        with st.spinner("Processing... Please wait ⏳"):
-            for file in uploaded_files:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    tmp.write(file.read())
-                    tmp_path = tmp.name
-
-                text = extract_text_from_pdf(tmp_path)
-                details = extract_details_with_gemini(text, file.name)
-                results.append(details)
-
-        df = pd.DataFrame(results, columns=columns)
-
-        st.success("✅ Extraction complete!")
-        st.dataframe(df)
-
-        # Save to Excel
-        output_path = "litigation_tracker_output.xlsx"
-        df.to_excel(output_path, index=False)
-
-        with open(output_path, "rb") as f:
-            st.download_button("📥 Download Excel", f, file_name=output_path, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        # Parse Gemini output into dict (naive way)
+        data = {
+            "Entity Name": "",
+            "GSTIN": "",
+            "Type of Notice / Order (System Update)": "",
+            "Description": "",
+            "Ref ID": "",
+            "Date Of Issuance": "",
+            "Due Date": "",
+            "Case ID": "",
+            "Notice Type (ASMT-10 or ADT
 
