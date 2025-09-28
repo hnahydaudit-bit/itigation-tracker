@@ -1,6 +1,5 @@
 streamlit
-google-generativeai
 pandas
-pillow
-pytesseract
+google-generativeai
 PyMuPDF
+openpyxl
