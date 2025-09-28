@@ -8,7 +8,7 @@ import pytesseract
 import google.generativeai as genai
 
 # Configure Gemini (API key from Streamlit secrets)
-genai.configure(api_key=st.secrets["AIzaSyDMa8ZqsVt8e0ThJl2DfjJAhfBLhT35hhI"])
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 st.set_page_config(page_title="LITIGATION TRACKER", page_icon="📂")
 
@@ -106,3 +106,4 @@ if uploaded_files:
 
         with open(output_path, "rb") as f:
             st.download_button("📥 Download Excel", f, file_name=output_path, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
