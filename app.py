@@ -4,13 +4,13 @@ import fitz  # PyMuPDF
 import google.generativeai as genai
 import tempfile
 import os
+import json, re
 
 # 🔑 Configure Gemini (API key from Streamlit Cloud secrets)
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # 🎨 Page setup
 st.set_page_config(page_title="LITIGATION TRACKER", page_icon="📂")
-
 st.title("📂 LITIGATION TRACKER")
 
 # ---------- Helper Functions ----------
@@ -23,6 +23,7 @@ def extract_text_from_pdf(file_path):
             text += page.get_text("text")
     return text.strip()
 
+
 def extract_with_ai(text, filename):
     """Send extracted text to Gemini and ask for structured fields."""
     prompt = f"""
@@ -30,6 +31,7 @@ def extract_with_ai(text, filename):
 
     Extract the following fields from the text below. 
     If a field is not present, leave it blank.
+    Make absolutely sure that "Ref ID" and "Due Date" are extracted as accurately as possible.
 
     Fields:
     - Entity Name
@@ -43,6 +45,10 @@ def extract_with_ai(text, filename):
     - Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)
     - Financial Year
     - Total Demand Amount as per Notice
+    - DIN Number
+    - Officer Name
+    - Officer Designation
+    - Officer Area / Division
 
     Return ONLY a JSON object with these keys.
 
@@ -51,12 +57,11 @@ def extract_with_ai(text, filename):
     """
 
     try:
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
+        model = genai.GenerativeModel("models/gemini-2.5-pro")  # Pro for better accuracy
         resp = model.generate_content(prompt)
         data = resp.candidates[0].content.parts[0].text
 
-        # Clean response
-        import json, re
+        # Extract JSON part safely
         match = re.search(r"\{.*\}", data, re.DOTALL)
         if match:
             parsed = json.loads(match.group(0))
@@ -76,6 +81,10 @@ def extract_with_ai(text, filename):
             "Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)",
             "Financial Year",
             "Total Demand Amount as per Notice",
+            "DIN Number",
+            "Officer Name",
+            "Officer Designation",
+            "Officer Area / Division",
             "Source"
         ]
         row = {col: parsed.get(col, "") for col in columns}
