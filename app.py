@@ -45,6 +45,9 @@ def extract_with_ai(text, filename):
     - Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)
     - Financial Year
     - Total Demand Amount as per Notice
+    - Tax Amount
+    - Interest
+    - Penalty
     - DIN Number
     - Officer Name
     - Officer Designation
@@ -68,7 +71,7 @@ def extract_with_ai(text, filename):
         else:
             parsed = {}
 
-        # Ensure all columns exist
+        # Fixed column order
         columns = [
             "Entity Name",
             "GSTIN",
@@ -81,6 +84,9 @@ def extract_with_ai(text, filename):
             "Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)",
             "Financial Year",
             "Total Demand Amount as per Notice",
+            "Tax Amount",
+            "Interest",
+            "Penalty",
             "DIN Number",
             "Officer Name",
             "Officer Designation",
@@ -117,8 +123,31 @@ if uploaded_files:
 
         os.remove(tmp_path)
 
-    df = pd.DataFrame(results)
-    st.success("✅ Extraction complete!")
+    # ✅ Force exact column order every time
+    columns = [
+        "Entity Name",
+        "GSTIN",
+        "Type of Notice / Order (System Update)",
+        "Description",
+        "Ref ID",
+        "Date Of Issuance",
+        "Due Date",
+        "Case ID",
+        "Notice Type (ASMT-10 or ADT - 01 / SCN or Appeal)",
+        "Financial Year",
+        "Total Demand Amount as per Notice",
+        "Tax Amount",
+        "Interest",
+        "Penalty",
+        "DIN Number",
+        "Officer Name",
+        "Officer Designation",
+        "Officer Area / Division",
+        "Source"
+    ]
+    df = pd.DataFrame(results, columns=columns)
+
+    st.success("✅ Extraction complete! Your Excel file is ready to download.")
 
     st.dataframe(df)
 
